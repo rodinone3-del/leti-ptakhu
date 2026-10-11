@@ -3,11 +3,11 @@ window.GAME_CONFIG = {
   // Особистий трек для кожного підземелля: впишіть назву файлу з папки music, наприклад "bats_theme.mp3".
   // Порожньо: у цьому підземеллі грає звичайний плейлист. Файл крутиться по колу, поки ви в підземеллі.
   dungeonTracks: {
-    bats:  "Bat_Dungeon",   // Лігво кажанів
-    ice:   "Ice_Canyon",   // Крижане ущелля
-    forge: "Flame_Forge",   // Вогняна кузня
-    swamp: "Foggy_Swamp",   // Туманне болото
-    storm: "Thunder_Ridge"    // Грозовий хребет
+    bats:  "Bat_Dungeon.mp3",   // Лігво кажанів
+    ice:   "Ice_Canyon.mp3",   // Крижане ущелля
+    forge: "Flame_Forge.mp3",   // Вогняна кузня
+    swamp: "Foggy_Swamp.mp3",   // Туманне болото
+    storm: "Thunder_Ridge.mp3"    // Грозовий хребет
   },
   // Кнопка "Продовжити" після програшу (повернення на чекпоінт за рекламу).
   ads: {

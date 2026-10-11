@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <script src="firebase-config.js"></script>
+<script src="game-config.js"></script>
 <title>Лети, птаху</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -84,7 +85,7 @@ button:disabled{cursor:default}
 .fx span{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--panel);border:1px solid var(--line)}
 .fx .sh{color:var(--teal)}
 .fx .sl{color:#9db8ff}
-#hint{position:absolute;left:30px;right:30px;top:210px;padding:16px;border-radius:18px;background:var(--panel);border:1px solid var(--line);text-align:center;pointer-events:none}
+#hint{position:absolute;left:30px;right:30px;top:calc(210px + var(--ex,0px));padding:16px;border-radius:18px;background:var(--panel);border:1px solid var(--line);text-align:center;pointer-events:none}
 #hint[hidden]{display:none}
 #hint b{display:block;font-family:var(--display);font-size:18px;margin-bottom:6px}
 #hint span{color:var(--muted);font-size:14px;line-height:1.4}
@@ -125,6 +126,9 @@ button:disabled{cursor:default}
 .vol span{width:44px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
 .tog{min-width:116px}
 .tog.on{background:var(--amber);color:#2a1b00;border-color:transparent}
+.pbar{position:relative;height:10px;border-radius:5px;background:rgba(255,255,255,.14);margin:8px 0 6px}
+.pbar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:5px;background:var(--coral)}
+.pbar u{position:absolute;top:-4px;width:3px;height:18px;border-radius:2px;background:var(--teal);text-decoration:none}
 .pips{display:flex;gap:4px;margin-top:7px}
 .pips i{width:16px;height:6px;border-radius:3px;background:rgba(255,255,255,.18)}
 .pips i.on{background:var(--teal)}
@@ -239,6 +243,10 @@ button:disabled{cursor:default}
     <div class="head"><button class="btn small" data-back>Назад</button><h2>Налаштування</h2></div>
     <div class="scroll">
       <div class="set">
+        <div class="srow"><b>Загальна гучність</b></div>
+        <div class="vol"><input type="range" id="masVol" min="0" max="100" step="5" value="100" aria-label="Загальна гучність"><span id="masPct">100%</span></div>
+      </div>
+      <div class="set">
         <div class="srow"><b>Звукові ефекти</b><button class="btn small tog" id="btnSfx">Увімкнено</button></div>
         <div class="vol"><input type="range" id="sfxVol" min="0" max="100" step="5" value="20" aria-label="Гучність звуку"><span id="sfxPct">20%</span></div>
       </div>
@@ -248,6 +256,15 @@ button:disabled{cursor:default}
         <p class="sub" id="musNow"></p>
         <button class="btn small" id="btnTrackNext" hidden>Наступний трек</button>
       </div>
+    </div>
+  </section>
+
+  <section class="screen modal" id="sAd" hidden>
+    <div class="card">
+      <h3>Реклама</h3>
+      <p class="sub">Тестова реклама. Тут з'явиться відео, а після нього гра продовжиться з чекпоінта.</p>
+      <div class="stat"><span>Нагорода через</span><b id="adSec">5</b></div>
+      <button class="btn" id="btnAdCancel">Закрити без нагороди</button>
     </div>
   </section>
 
@@ -268,7 +285,13 @@ button:disabled{cursor:default}
         <div class="stat"><span>Зібрані бонуси</span><b id="rBonus">+0</b></div>
         <div class="stat" id="rRewardRow"><span>Нагорода за рівень</span><b id="rReward">+0</b></div>
       </div>
+      <div id="rProgBox" hidden>
+        <div class="stat"><span>Пройдено шляху</span><b id="rProgPct">0%</b></div>
+        <div class="pbar"><i id="rProgFill"></i><u id="rProgCp" hidden></u></div>
+        <p class="sub" id="rProgNote"></p>
+      </div>
       <p class="sub" id="rNote"></p>
+      <button class="btn primary" id="btnContinue" hidden>Продовжити · реклама</button>
       <button class="btn primary" id="btnNext">Далі</button>
       <div class="row"><button class="btn" id="btnRetry">Заново</button><button class="btn" id="btnMenu">Меню</button></div>
     </div>
@@ -281,13 +304,17 @@ button:disabled{cursor:default}
 var W=360,H=640,GROUND=584,BX=96,R=13,GRAV=1500,FLAP=450,MAXV=720,KEY='leti-ptakhu.v1';
 var $=function(s){return document.querySelector(s)};
 var cv=$('#cv'),ctx=cv.getContext('2d');
+var CFG=window.GAME_CONFIG||{};
+var EX=0;   /* додатковий простір згори й знизу на високих екранах */
 
 /* ---------- збереження ---------- */
-function defSave(){return {coins:0,unlocked:1,stars:{},owned:['sparrow'],skin:'sparrow',mute:false,skl:{},pick:'dash',dun:{},nick:'',musicOn:true,sfxVol:.2,musVol:.2}}
+function defSave(){return {coins:0,unlocked:1,stars:{},owned:['sparrow'],skin:'sparrow',mute:false,skl:{},pick:'dash',dun:{},nick:'',musicOn:true,sfxVol:.6,musVol:.1,master:1,tries:0}}
 var S=(function(){try{var r=localStorage.getItem(KEY);if(r){var o=JSON.parse(r);var d=defSave();for(var k in d){if(o[k]===undefined)o[k]=d[k]}return o}}catch(e){}return defSave()})();
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-function vol01(v){v=+v;return v>=0&&v<=1?v:.2}
-S.sfxVol=vol01(S.sfxVol);S.musVol=vol01(S.musVol);
+function vol01(v,d){v=+v;return v>=0&&v<=1?v:d}
+if(S.audioV!==2){S.sfxVol=.6;S.musVol=.1;S.master=1;S.audioV=2}   /* базова гучність: звук 60%, музика 10%, загальна 100% */
+S.sfxVol=vol01(S.sfxVol,.6);S.musVol=vol01(S.musVol,.1);S.master=vol01(S.master,1);S.tries=Math.max(0,Math.floor(+S.tries||0));
+function plu(n,a){var m=n%10,h=n%100;return n+' '+(m===1&&h!==11?a[0]:(m>=2&&m<=4&&(h<12||h>14))?a[1]:a[2])}
 
 /* ---------- онлайн: лідерборд і аналітика (Firebase). Без налаштувань гра працює як раніше ---------- */
 var FB_VER='10.12.2';
@@ -325,7 +352,7 @@ function myStats(){
   var stars=0,k;for(k in S.stars)stars+=S.stars[k]||0;
   var dc=0,ds=0,i;
   for(i=0;i<DUN.length;i++){var d=(S.dun&&S.dun[DUN[i].id])||{};dc+=d.best||0;ds+=d.stars||0}
-  return {level:Math.max(0,S.unlocked-1),stars:stars,dunCrystals:dc,dunStars:ds};
+  return {level:Math.max(0,S.unlocked-1),stars:stars,dunCrystals:dc,dunStars:ds,tries:S.tries||0};
 }
 function syncScore(){
   if(!S.nick||!cfgOk())return Promise.resolve(false);
@@ -334,7 +361,7 @@ function syncScore(){
     var ref=ON.db.collection('players').doc(ON.uid),m=myStats();
     return ref.get().then(function(snap){
       var o=snap.exists?snap.data():{};
-      var data={name:S.nick,level:Math.max(m.level,o.level||0),stars:Math.max(m.stars,o.stars||0),dunCrystals:Math.max(m.dunCrystals,o.dunCrystals||0),dunStars:Math.max(m.dunStars,o.dunStars||0),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+      var data={name:S.nick,level:Math.max(m.level,o.level||0),stars:Math.max(m.stars,o.stars||0),dunCrystals:Math.max(m.dunCrystals,o.dunCrystals||0),dunStars:Math.max(m.dunStars,o.dunStars||0),tries:Math.max(m.tries,o.tries||0),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
       return ref.set(data).then(function(){return true});
     });
   }).catch(function(e){ON.err=(e&&e.code)||'sync';return false});
@@ -390,8 +417,9 @@ function renderBoardRows(rows,lv){
     var rk=document.createElement('span');rk.className='rk';rk.textContent=i+1;
     var nm=document.createElement('span');nm.className='bn';nm.textContent=x.name||'Гравець';
     var v=document.createElement('span');v.className='bv';var sm=document.createElement('small');
-    if(lv){v.textContent=(x.level||0)+' рів.';sm.textContent='★ '+(x.stars||0)}
-    else{v.textContent=(x.dunCrystals||0)+' кр.';sm.textContent=(x.dunStars?'★ '+x.dunStars:'—')}
+    var tr=x.tries?' · '+plu(x.tries,['спроба','спроби','спроб']):'';
+    if(lv){v.textContent=(x.level||0)+' рів.';sm.textContent='★ '+(x.stars||0)+tr}
+    else{v.textContent=(x.dunCrystals||0)+' кр.';sm.textContent=(x.dunStars?'★ '+x.dunStars:'—')+tr}
     v.appendChild(sm);r.appendChild(rk);r.appendChild(nm);r.appendChild(v);box.appendChild(r);
   });
   var m=myStats();
@@ -402,19 +430,19 @@ function renderBoardRows(rows,lv){
 var AC=null;
 function ac(){AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended'){try{AC.resume()}catch(e){}}return AC}
 function snd(f,d,type,v,slide){
-  if(S.mute||S.sfxVol<=0)return;
+  if(S.mute||S.sfxVol*S.master<=0)return;
   try{
     var a=ac(),o=a.createOscillator(),g=a.createGain(),t=a.currentTime;
     d=d||.08;o.type=type||'sine';o.frequency.setValueAtTime(f,t);
     if(slide)o.frequency.linearRampToValueAtTime(f+slide,t+d);
     /* базова гучність 20% відповідає початковим значенням; 100% гучніше у 5 разів */
-    g.gain.setValueAtTime(Math.min(.6,(v||.05)*S.sfxVol/.2),t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+    g.gain.setValueAtTime(Math.min(.6,(v||.05)*S.sfxVol*S.master/.2),t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
     o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d);
   }catch(e){}
 }
 
 /* ---------- фонова музика: треки лежать у папці music/, список у music/playlist.json ---------- */
-var MUSIC_DIR='music/',MU={list:[],queue:[],cur:'',el:null,gain:null,loaded:false,loading:null,fail:0};
+var MUSIC_DIR='music/',MU={list:[],queue:[],cur:'',mode:'',el:null,gain:null,loaded:false,loading:null,fail:0};
 function trackName(t){return t.replace(/^.*\//,'').replace(/\.[^.]+$/,'').replace(/_+/g,' ')}
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),x=a[i];a[i]=a[j];a[j]=x}return a}
 function musicInit(){
@@ -433,12 +461,12 @@ function musicInit(){
   }).then(function(a){MU.list=a;MU.loaded=true;musicUi()});
   return MU.loading;
 }
-function musicApplyVol(){if(MU.gain)MU.gain.gain.value=S.musVol;if(MU.el)MU.el.volume=MU.gain?1:S.musVol}
+function musicApplyVol(){var vv=S.musVol*S.master;if(MU.gain)MU.gain.gain.value=vv;if(MU.el)MU.el.volume=MU.gain?1:vv}
 function musicEl(){
   if(MU.el)return MU.el;
   var el=new Audio();el.preload='auto';
   el.addEventListener('ended',function(){musicNext()});
-  el.addEventListener('error',function(){MU.fail++;if(MU.fail<MU.list.length)musicNext();else{MU.cur='';musicUi()}});
+  el.addEventListener('error',function(){if(MU.mode==='dun'){MU.mode='';musicNext();return}MU.fail++;if(MU.fail<MU.list.length)musicNext();else{MU.cur='';musicUi()}});
   el.addEventListener('playing',function(){MU.fail=0;musicUi()});
   el.addEventListener('pause',function(){musicUi()});
   MU.el=el;
@@ -452,15 +480,31 @@ function musicNext(){
     MU.queue=shuffle(MU.list.slice());
     if(MU.queue.length>1&&MU.queue[0]===MU.cur)MU.queue.push(MU.queue.shift());
   }
-  var t=MU.queue.shift();MU.cur=t;
-  var el=musicEl();musicApplyVol();
+  musicPlay(MU.queue.shift(),false);
+}
+function musicPlay(t,loop){
+  MU.cur=t;
+  var el=musicEl();musicApplyVol();el.loop=!!loop;
   el.src=MUSIC_DIR+t.split('/').map(encodeURIComponent).join('/');
   var p=el.play();if(p&&p.catch)p.catch(function(){musicUi()});
   musicUi();
 }
+/* особистий трек підземелля з game-config.js; якщо не вказано, лишається звичайний плейлист */
+function dunTrack(id){var t=(CFG.dungeonTracks||{})[id];return typeof t==='string'&&t.replace(/\s/g,'')?t.trim():''}
+function musicDungeon(id){
+  var t=dunTrack(id);if(!t||!S.musicOn)return;
+  if(MU.mode==='dun'&&MU.cur===t&&MU.el&&!MU.el.paused)return;
+  MU.mode='dun';musicPlay(t,true);
+}
+function musicBack(){
+  if(MU.mode!=='dun')return;
+  MU.mode='';if(MU.el)MU.el.loop=false;
+  if(S.musicOn)musicNext();else musicStop();
+}
 /* викликається при кожному дотику: браузер дозволяє звук лише після дії користувача */
 function musicKick(){
   if(!S.musicOn||document.hidden)return;
+  if(MU.mode==='dun'&&MU.el&&MU.el.paused){try{ac()}catch(e){}var q=MU.el.play();if(q&&q.catch)q.catch(function(){});return}
   if(!MU.list.length){if(!MU.loaded)musicInit().then(musicKick);return}
   if(MU.el&&MU.cur&&!MU.el.paused)return;
   try{ac()}catch(e){}
@@ -481,6 +525,7 @@ function setTog(sel,on){var b=$(sel);b.textContent=on?'Увімкнено':'Ви
 function syncAudioBtns(){
   setTog('#btnSfx',!S.mute);setTog('#btnMusic',S.musicOn);
   $('#btnSfxP').textContent='Звук: '+(S.mute?'ні':'так');$('#btnMusP').textContent='Музика: '+(S.musicOn?'так':'ні');
+  $('#masVol').value=Math.round(S.master*100);$('#masPct').textContent=Math.round(S.master*100)+'%';
   $('#sfxVol').value=Math.round(S.sfxVol*100);$('#sfxPct').textContent=Math.round(S.sfxVol*100)+'%';
   $('#musVol').value=Math.round(S.musVol*100);$('#musPct').textContent=Math.round(S.musVol*100)+'%';
   musicUi();
@@ -597,17 +642,17 @@ function hills(c,cam,p,base,amp,wl,col){
   c.lineTo(W,GROUND);c.closePath();c.fill();
 }
 var STARS=[],CLOUDS=[];
-(function(){var r=rng(5);for(var i=0;i<46;i++)STARS.push({x:r()*W,y:r()*330,s:.6+r()*1.4,p:r()*6});for(i=0;i<6;i++)CLOUDS.push({x:r()*700,y:50+r()*220,s:.7+r()*.9})})();
+(function(){var r=rng(5);for(var i=0;i<46;i++)STARS.push({x:r()*W,y:r()*590-260,s:.6+r()*1.4,p:r()*6});for(i=0;i<9;i++)CLOUDS.push({x:r()*700,y:-200+r()*470,s:.7+r()*.9})})();
 function drawWorld(c,cam,th,t){
-  var g=c.createLinearGradient(0,0,0,GROUND);g.addColorStop(0,th.sky[0]);g.addColorStop(1,th.sky[1]);
-  c.fillStyle=g;c.fillRect(0,0,W,H);
+  var g=c.createLinearGradient(0,-EX,0,GROUND);g.addColorStop(0,th.sky[0]);g.addColorStop(1,th.sky[1]);
+  c.fillStyle=g;c.fillRect(0,-EX,W,H+2*EX);
   if(th.stars){c.fillStyle='#fff';for(var i=0;i<STARS.length;i++){var s=STARS[i];c.globalAlpha=.5+.5*Math.sin(t*1.5+s.p);c.fillRect(s.x,s.y,s.s,s.s)}c.globalAlpha=1}
   if(th.aurora){for(var k=0;k<2;k++){c.fillStyle=k?'rgba(94,224,200,.16)':'rgba(140,120,255,.14)';c.beginPath();c.moveTo(0,0);for(var x=0;x<=W;x+=8)c.lineTo(x,150+k*40+30*Math.sin(x/70+t*.4+k*2));c.lineTo(W,0);c.closePath();c.fill()}}
   if(th.sun){c.fillStyle=th.sun.c;c.globalAlpha=.25;c.beginPath();c.arc(th.sun.x,th.sun.y,th.sun.r*1.7,0,7);c.fill();c.globalAlpha=1;c.beginPath();c.arc(th.sun.x,th.sun.y,th.sun.r,0,7);c.fill()}
   if(!th.stars&&!th.cave&&!th.nocl){c.fillStyle='rgba(255,255,255,.55)';for(i=0;i<CLOUDS.length;i++){var cl=CLOUDS[i],cx=((cl.x-cam*.08)%700+700)%700-170;c.beginPath();c.ellipse(cx,cl.y,38*cl.s,12*cl.s,0,0,7);c.ellipse(cx+22*cl.s,cl.y-8*cl.s,24*cl.s,12*cl.s,0,0,7);c.ellipse(cx-20*cl.s,cl.y-5*cl.s,20*cl.s,10*cl.s,0,0,7);c.fill()}}
   hills(c,cam,.12,GROUND-120,38,70,th.far);
   hills(c,cam,.3,GROUND-48,26,48,th.near);
-  c.fillStyle=th.gr;c.fillRect(0,GROUND,W,H-GROUND);
+  c.fillStyle=th.gr;c.fillRect(0,GROUND,W,H-GROUND+EX);
   c.fillStyle=th.gs;c.fillRect(0,GROUND,W,9);
   c.fillStyle='rgba(0,0,0,.18)';var off=-(cam%28);for(i=off;i<W;i+=28){c.beginPath();c.moveTo(i,GROUND+16);c.lineTo(i+12,GROUND+16);c.lineTo(i+6,GROUND+30);c.closePath();c.fill()}
 }
@@ -660,8 +705,8 @@ function pillarCave(c,x,yA,yB,w,th,hang){
 }
 function hitObs(sx,o,gy,hg,cave){
   var w=o.w,yt=gy-hg/2,yb=gy+hg/2,by=G.by,r=G.rr;
-  if(!cave)return circleRect(BX,by,r,sx,-50,w,yt+50)||circleRect(BX,by,r,sx,yb,w,GROUND-yb);
-  return circleRect(BX,by,r,sx,-50,w,yt-30+50)||circleRect(BX,by,r,sx+w*.1667,yt-30,w*.667,10)||circleRect(BX,by,r,sx+w*.333,yt-20,w*.333,10)
+  if(!cave)return circleRect(BX,by,r,sx,-400,w,yt+400)||circleRect(BX,by,r,sx,yb,w,GROUND-yb);
+  return circleRect(BX,by,r,sx,-400,w,yt-30+400)||circleRect(BX,by,r,sx+w*.1667,yt-30,w*.667,10)||circleRect(BX,by,r,sx+w*.333,yt-20,w*.333,10)
     ||circleRect(BX,by,r,sx,yb+30,w,GROUND-yb-30)||circleRect(BX,by,r,sx+w*.1667,yb+20,w*.667,10)||circleRect(BX,by,r,sx+w*.333,yb+10,w*.333,10);
 }
 function drawDrop(c,x,y,t,col){
@@ -673,12 +718,12 @@ function drawDrop(c,x,y,t,col){
 }
 function drawGust(c,z,sx0,sx1,t){
   var up=z.dir<0,a=Math.max(-10,sx0),b=Math.min(W+10,sx1);if(b<=a)return;
-  c.fillStyle=up?'rgba(120,230,255,.10)':'rgba(255,120,190,.10)';c.fillRect(a,0,b-a,GROUND);
+  c.fillStyle=up?'rgba(120,230,255,.10)':'rgba(255,120,190,.10)';c.fillRect(a,-EX,b-a,GROUND+EX);
   c.strokeStyle=up?'rgba(170,240,255,.55)':'rgba(255,170,215,.55)';c.lineWidth=2.5;c.lineCap='round';c.lineJoin='round';
   var sh=(t*110)%120;if(up)sh=-sh;
   for(var xx=Math.max(a+22,sx0+22);xx<b-10;xx+=46){
-    for(var yy=-120;yy<GROUND+120;yy+=120){
-      var y=yy+sh;if(y<-10||y>GROUND)continue;
+    for(var yy=-120-Math.ceil(EX/120)*120;yy<GROUND+120;yy+=120){
+      var y=yy+sh;if(y<-EX-10||y>GROUND)continue;
       c.beginPath();
       if(up){c.moveTo(xx-8,y+5);c.lineTo(xx,y-4);c.lineTo(xx+8,y+5)}else{c.moveTo(xx-8,y-5);c.lineTo(xx,y+4);c.lineTo(xx+8,y-5)}
       c.stroke();
@@ -825,26 +870,26 @@ var DTH={
  storm:{n:'Грозовий хребет',cave:true,nocl:1,stars:1,storm:1,dropC:'110,180,255',sky:['#0a0d22','#2a3070'],far:'#1d2458',near:'#121740',pil:['#6a74a8','#9aa4d8','#3a4170'],gr:'#0a0d22',gs:'#5d7cff'}
 };
 var DUN=[
- {id:'bats',n:'Лігво кажанів',at:5,seed:5219,skin:'bat',skill:'freeze',bonus:[120,180,300],th:[.7,.92],lose:'Кажани перемогли',
+ {id:'bats',n:'Лігво кажанів',at:5,seed:1102,skin:'bat',skill:'freeze',bonus:[120,180,300],th:[.75,.92],lose:'Кажани перемогли',
   hint:'Темно, удар кінцевий. Кристали світяться здалеку.',
   desc:'Темна печера: видно лише навколо птаха. Сталактити, рухомі проходи й кажани, що кружляють між колонами.',
-  p:{speed:180,gap:164,count:24,space:212,moveP:.28,maxD:110,bat:1}},
- {id:'ice',n:'Крижане ущелля',at:10,seed:5524,skin:'owl',skill:'slow',bonus:[160,240,400],th:[.7,.9],lose:'Крига перемогла',
+  p:{speed:186,gap:160,count:24,space:212,moveP:.32,maxD:110,bat:1}},
+ {id:'ice',n:'Крижане ущелля',at:10,seed:1809,skin:'owl',skill:'slow',bonus:[160,240,400],th:[.75,.9],lose:'Крига перемогла',
   hint:'Потоки повітря зсувають птаха вгору й униз. Стежте за стрілками.',
   desc:'Крижані бурульки й поривчасті потоки повітря. Кольорова смуга й стрілки попереджають, куди понесе птаха.',
-  p:{speed:184,gap:162,count:26,space:212,moveP:.3,maxD:115,gust:.3,gstr:400}},
- {id:'forge',n:'Вогняна кузня',at:15,seed:1754,skin:'phoenix',skill:'shield',bonus:[200,300,500],th:[.7,.9],lose:'Кузня перемогла',
+  p:{speed:190,gap:158,count:26,space:212,moveP:.34,maxD:115,gust:.3,gstr:400}},
+ {id:'forge',n:'Вогняна кузня',at:15,seed:5219,skin:'phoenix',skill:'shield',bonus:[200,300,500],th:[.75,.9],lose:'Кузня перемогла',
   hint:'Розпечені краплі падають зверху. Мітка вгорі попереджає про падіння.',
   desc:'Розпечені краплі падають просто на лінію польоту. Мітка вгорі показує, де вони впадуть.',
-  p:{speed:184,gap:162,count:28,space:210,moveP:.22,maxD:115,drop:.22,doff:64,dvf:200}},
- {id:'swamp',n:'Туманне болото',at:20,seed:2508,skin:'stork',skill:'vacuum',bonus:[250,380,650],th:[.65,.88],lose:'Болото поглинуло вас',
+  p:{speed:190,gap:158,count:28,space:210,moveP:.26,maxD:115,drop:.25,doff:64,dvf:200}},
+ {id:'swamp',n:'Туманне болото',at:20,seed:2314,skin:'stork',skill:'vacuum',bonus:[250,380,650],th:[.7,.88],lose:'Болото поглинуло вас',
   hint:'Туман ховає все далеке. Колони гойдаються сильніше.',
   desc:'Густий туман і дерев\'яні колони, що сильно гойдаються. Далекі проходи майже не видно.',
-  p:{speed:190,gap:158,count:28,space:208,moveP:.55,maxD:112,amp0:26,ampR:22}},
- {id:'storm',n:'Грозовий хребет',at:25,seed:5147,skin:'thunder',skill:'auto',bonus:[300,450,800],th:[.65,.88],lose:'Буря перемогла',
+  p:{speed:195,gap:155,count:28,space:208,moveP:.6,maxD:112,amp0:26,ampR:22}},
+ {id:'storm',n:'Грозовий хребет',at:25,seed:5219,skin:'thunder',skill:'auto',bonus:[300,450,800],th:[.7,.88],lose:'Буря перемогла',
   hint:'Потоки повітря й заряди, що падають із хмар. Не втрачайте голову.',
   desc:'Найважче випробування: сильні потоки повітря й заряди, що падають із грозових хмар.',
-  p:{speed:190,gap:158,count:30,space:206,moveP:.4,maxD:118,gust:.25,gstr:450,drop:.15,doff:64,dvf:200}}
+  p:{speed:195,gap:155,count:30,space:206,moveP:.44,maxD:118,gust:.25,gstr:450,drop:.15,doff:64,dvf:200}}
 ];
 function dunById(id){for(var i=0;i<DUN.length;i++)if(DUN[i].id===id)return DUN[i];return DUN[0]}
 function buildDungeon(d){
@@ -898,11 +943,12 @@ var screen='home',G=null,scale=1,menuCam=0,menuT=0,parts=[],last=0,paused=false;
 var VAL={coin:1,shield:3,slow:3,gem:2};
 
 function show(id){
-  var ids=['sHome','sLevels','sShop','sPick','sDun','sBoard','sNick','sSettings','sPause','sResult'];
+  var ids=['sHome','sLevels','sShop','sPick','sDun','sBoard','sNick','sSettings','sAd','sPause','sResult'];
   for(var i=0;i<ids.length;i++)$('#'+ids[i]).hidden=ids[i]!==id;
 }
 function fx(){var a=document.querySelectorAll('.coinsTxt');for(var i=0;i<a.length;i++)a[i].textContent=S.coins;$('#homeCoins').textContent=S.coins;$('#hCoins').textContent=S.coins}
 function goHome(){
+  musicBack();
   screen='home';paused=false;G=null;$('#hud').hidden=true;$('#hint').hidden=true;hideSkillBtns();
   show('sHome');$('#btnPlay').textContent='Грати · рівень '+S.unlocked;$('#btnBoard').hidden=!cfgOk();
   syncAudioBtns();fx();persist();
@@ -996,7 +1042,7 @@ function startDungeon(d){if(S.unlocked>=d.at)beginLevel(0,d)}
 function beginLevel(n,dun){
   var L=dun?buildDungeon(dun):buildLevel(n);
   var sk=skinById(S.skin),opt=dun?'':pickedOpt();
-  G={L:L,n:n,t:0,tt:0,cam:0,by:300,vy:0,wp:0,alive:true,won:false,ready:true,shield:false,slow:0,inv:0,passed:0,got:0,gotCoins:0,deadT:0,trail:0,done:false,
+  G={L:L,n:n,t:0,tt:0,cam:0,by:300,vy:0,wp:0,alive:true,won:false,ready:true,shield:false,slow:0,inv:0,passed:0,got:0,gotCoins:0,deadT:0,trail:0,done:false,conts:0,ry:300,
      act:[],pas:{},dash:0,wasDash:false,mag:0,mlv:1,wide:0,wlv:1,dbl:0,wf:1,frz:0,hov:0,auto:0,rr:R,sc:1,gf:1,spr:0,vc:0,vN:0,rg:0,rgN:0,cp:0,gz:0,revives:0};
   function add(id,l){var a=AB[id];if(a.kind==='a')G.act.push({id:id,lv:l,cd:0,cdMax:a.cd(l)});else G.pas[id]=l}
   add(sk.ab,sk.al);if(opt)add(opt,abLevel(opt));
@@ -1009,6 +1055,8 @@ function beginLevel(n,dun){
   if(P.regen){G.rgN=Math.max(12,26-3*P.regen);G.rg=G.rgN}
   if(P.coinplus&&!dun)G.cp=(8+4*P.coinplus)/100;
   setupSkillBtns();
+  S.tries++;persist();
+  if(dun)musicDungeon(dun.id);else musicBack();
   track('level_start',{level_name:dun?('D_'+dun.id):('L'+n),skin:sk.id,skill:opt||'none'});
   parts=[];screen='play';paused=false;
   show(null);$('#hud').hidden=false;
@@ -1048,7 +1096,7 @@ function update(dt){
   menuT+=dt;
   if(screen!=='play'||!G){menuCam+=40*dt;stepParts(dt);return}
   var g=G,L=g.L,P=g.pas,ai;g.t+=dt;
-  if(g.ready){g.by=300+Math.sin(g.t*4)*8;g.wp+=dt*12;return}
+  if(g.ready){g.by=(g.ry||300)+Math.sin(g.t*4)*8;g.wp+=dt*12;return}
   var f=g.slow>0?.62:1;
   g.slow=Math.max(0,g.slow-dt);g.inv=Math.max(0,g.inv-dt);
   for(ai=0;ai<g.act.length;ai++)g.act[ai].cd=Math.max(0,g.act[ai].cd-dt);
@@ -1071,7 +1119,7 @@ function update(dt){
     g.by+=g.vy*dt;
   }
   g.wp+=dt*(g.vy<0?30:10);
-  if(g.by<R){g.by=R;if(g.vy<0)g.vy=0}
+  if(g.by<R-EX){g.by=R-EX;if(g.vy<0)g.vy=0}
   if(g.alive&&!g.won){
     var i,o,sx,gy;
     for(i=0;i<L.obs.length;i++){
@@ -1152,6 +1200,55 @@ function stepParts(dt){
 
 
 /* ---------- кінець рівня ---------- */
+function resultExtras(g,won){
+  var L=g.L,box=$('#rProgBox'),cb=$('#btnContinue');
+  box.hidden=won;
+  if(won){cb.hidden=true;return}
+  var span=L.finish-440,pr=clamp((g.cam+BX-440)/span,0,1),k=g.passed,cp=$('#rProgCp');
+  $('#rProgPct').textContent=Math.round(pr*100)+'%';$('#rProgFill').style.width=(pr*100)+'%';
+  if(k>0){
+    var o=L.obs[k-1],cpr=clamp((o.x+o.w-440)/span,0,1);
+    cp.hidden=false;cp.style.left='calc('+(cpr*100)+'% - 1px)';
+    $('#rProgNote').textContent='Чекпоінт: труба '+k+' з '+L.obs.length+'.';
+  }else{cp.hidden=true;$('#rProgNote').textContent='Чекпоінта ще немає: пролетіть першу трубу.'}
+  var A=CFG.ads||{},max=A.maxContinues==null?3:A.maxContinues,left=max-g.conts;
+  var can=(A.mode||'mock')!=='off'&&k>0&&left>0;
+  cb.hidden=!can;
+  if(can)cb.textContent='Продовжити з чекпоінта · реклама'+(max<99?' ('+left+')':'');
+}
+var adTimer=0;
+function adShow(cb){
+  var A=CFG.ads||{},mode=A.mode||'mock',called=false;
+  musicStop();
+  function fin(ok){if(called)return;called=true;clearInterval(adTimer);adTimer=0;musicKick();cb(ok)}
+  if(mode==='custom'&&typeof window.showRewardedAd==='function'){
+    screen='ad';show(null);
+    try{window.showRewardedAd(function(){fin(true)},function(){fin(false)})}catch(e){fin(false)}
+    return;
+  }
+  var n=A.mockSeconds==null?5:A.mockSeconds;
+  screen='ad';show('sAd');$('#adSec').textContent=n;
+  $('#btnAdCancel').onclick=function(){fin(false)};
+  adTimer=setInterval(function(){n--;$('#adSec').textContent=Math.max(0,n);if(n<=0)fin(true)},1000);
+}
+function resumeRun(){
+  var g=G,L=g.L,k=g.passed,o=L.obs[k-1],nx=L.obs[k],i;
+  g.conts++;
+  g.cam=o.x+o.w+26-BX;
+  g.alive=true;g.won=false;g.done=false;g.deadT=0;g.vy=0;
+  g.ry=nx?nx.base:300;g.by=g.ry;
+  g.ready=true;g.inv=1.2;g.shield=false;
+  g.dash=0;g.wasDash=false;g.mag=0;g.wide=0;g.dbl=0;g.frz=0;g.hov=0;g.auto=0;g.slow=0;g.wf=1;
+  if(L.drops)for(i=0;i<L.drops.length;i++){var dr=L.drops[i];if(dr.x>g.cam+BX-10){dr.t0=-1;dr.dead=false}}
+  for(i=0;i<L.items.length;i++){var it=L.items[i];if(!it.got&&it.pull)it.pull=false}
+  parts=[];screen='play';paused=false;
+  show(null);$('#hud').hidden=false;
+  $('#hintT').textContent='Чекпоінт';
+  $('#hintS').textContent='Труба '+k+' з '+L.obs.length+'. Торкніться екрана, щоб продовжити.';
+  $('#hint').hidden=false;
+  setupSkillBtns();fx();fxKey='';
+  track('continue_ad',{level_name:L.dun?('D_'+L.dun.id):('L'+g.n),checkpoint:k});
+}
 function endDungeon(){
   var g=G,d=g.L.dun,won=g.won,stars=0,reward=0,prize=false,newSkill=false;
   var rec=S.dun[d.id]||(S.dun[d.id]={stars:0}),prev=rec.stars||0;
@@ -1186,6 +1283,7 @@ function endDungeon(){
   $('#rNote').textContent=txt;
   $('#btnNext').hidden=true;
   $('#btnRetry').textContent=won?'Заново':'Спробувати ще';
+  resultExtras(g,won);
   show('sResult');screen='result';
 }
 function endLevel(){
@@ -1215,6 +1313,7 @@ function endLevel(){
   $('#rNote').textContent=note;
   $('#btnNext').hidden=!won;$('#btnNext').textContent='Далі · рівень '+(n+1);
   $('#btnRetry').textContent=won?'Заново':'Спробувати ще';
+  resultExtras(g,won);
   show('sResult');screen='result';
 }
 
@@ -1239,12 +1338,12 @@ function render(){
     for(i=0;i<L.obs.length;i++){
       o=L.obs[i];sx=o.x-g.cam;if(sx>W+20)break;if(sx<-80)continue;
       gy=gapY(o,g.tt);var hg=o.gap*g.wf;
-      if(th.cave){pillarCave(c,sx,-10,gy-hg/2,o.w,th,true);pillarCave(c,sx,gy+hg/2,GROUND,o.w,th,false)}
-      else{pillar(c,sx,-10,gy-hg/2,o.w,th,true);pillar(c,sx,gy+hg/2,GROUND,o.w,th,false)}
+      if(th.cave){pillarCave(c,sx,-EX-10,gy-hg/2,o.w,th,true);pillarCave(c,sx,gy+hg/2,GROUND,o.w,th,false)}
+      else{pillar(c,sx,-EX-10,gy-hg/2,o.w,th,true);pillar(c,sx,gy+hg/2,GROUND,o.w,th,false)}
     }
     var fxp=L.finish-g.cam;
     if(fxp<W+30){
-      for(i=0;i<GROUND;i+=16){c.fillStyle=(i/16)%2?'#fff':'#14122e';c.fillRect(fxp,i,12,16);c.fillStyle=(i/16)%2?'#14122e':'#fff';c.fillRect(fxp+12,i,12,16)}
+      for(i=-Math.ceil(EX/16)*16;i<GROUND;i+=16){c.fillStyle=(i/16)%2?'#fff':'#14122e';c.fillRect(fxp,i,12,16);c.fillStyle=(i/16)%2?'#14122e':'#fff';c.fillRect(fxp+12,i,12,16)}
     }
     if(L.bats){
       for(i=0;i<L.bats.length;i++){
@@ -1273,10 +1372,10 @@ function render(){
     if(th.dark){
       var v=th.vis,rg=c.createRadialGradient(BX+40,g.by,v[0],BX+40,g.by,v[1]);
       rg.addColorStop(0,'rgba('+v[3]+',0)');rg.addColorStop(1,'rgba('+v[3]+','+v[2]+')');
-      c.fillStyle=rg;c.fillRect(0,0,W,H);
+      c.fillStyle=rg;c.fillRect(0,-EX,W,H+2*EX);
     }
     for(i=0;i<late.length;i++)drawItem(c,late[i][0],late[i][1],late[i][2],g.t);
-    if(th.storm){var q=g.t%7;if(q<.2){c.fillStyle='rgba(235,240,255,'+(.28*(1-q/.2))+')';c.fillRect(0,0,W,H)}}
+    if(th.storm){var q=g.t%7;if(q<.2){c.fillStyle='rgba(235,240,255,'+(.28*(1-q/.2))+')';c.fillRect(0,-EX,W,H+2*EX)}}
     drawParts(c);
     var blink=g.inv>0&&Math.floor(g.inv*14)%2===0;
     if(!blink){
@@ -1288,7 +1387,7 @@ function render(){
     }
     if(g.shield){c.strokeStyle='rgba(94,224,200,.9)';c.fillStyle='rgba(94,224,200,.16)';c.lineWidth=2;c.beginPath();c.arc(BX,g.by,24*g.sc,0,7);c.fill();c.stroke()}
     if(g.hov>0){c.strokeStyle='rgba(94,224,200,.7)';c.lineWidth=2;c.beginPath();c.moveTo(BX-14,g.by+22);c.lineTo(BX+14,g.by+22);c.stroke()}
-    if(g.frz>0){c.fillStyle='rgba(191,233,255,.10)';c.fillRect(0,0,W,H)}
+    if(g.frz>0){c.fillStyle='rgba(191,233,255,.10)';c.fillRect(0,-EX,W,H+2*EX)}
     // HUD
     var prog=clamp((g.cam+BX-440)/(L.finish-440),0,1);
     $('#hProg').style.width=(prog*100).toFixed(1)+'%';
@@ -1421,6 +1520,10 @@ $('#btnDun').onclick=function(){screen='dun';show('sDun');renderDun();fx()};
 $('#btnBoard').onclick=openBoard;
 $('#bTabLv').onclick=function(){boardTab='lv';loadBoard()};
 $('#bTabDun').onclick=function(){boardTab='dun';loadBoard()};
+$('#btnContinue').onclick=function(){
+  if(!G||G.won||screen!=='result')return;
+  adShow(function(ok){if(ok)resumeRun();else{screen='result';show('sResult')}});
+};
 $('#btnRename').onclick=openNick;
 $('#btnNickSave').onclick=saveNick;
 $('#btnNickCancel').onclick=function(){if(S.nick){screen='board';show('sBoard');loadBoard()}else goHome()};
@@ -1439,6 +1542,8 @@ $('#sfxVol').addEventListener('input',function(){S.sfxVol=this.value/100;$('#sfx
 $('#sfxVol').addEventListener('change',function(){persist();snd(660,.12,'triangle',.08,200)});
 $('#musVol').addEventListener('input',function(){S.musVol=this.value/100;$('#musPct').textContent=this.value+'%';musicApplyVol()});
 $('#musVol').addEventListener('change',function(){persist();musicKick()});
+$('#masVol').addEventListener('input',function(){S.master=this.value/100;$('#masPct').textContent=this.value+'%';musicApplyVol()});
+$('#masVol').addEventListener('change',function(){persist();snd(660,.12,'triangle',.08,200)});
 window.addEventListener('pointerdown',musicKick,{passive:true});
 window.addEventListener('keydown',musicKick);
 var backs=document.querySelectorAll('[data-back]');for(var bi=0;bi<backs.length;bi++)backs[bi].onclick=goHome;
@@ -1462,11 +1567,15 @@ document.addEventListener('visibilitychange',function(){if(document.hidden){paus
 window.addEventListener('pagehide',persist);
 
 function fit(){
-  var host=$('#host'),s=Math.min(host.clientWidth/W,host.clientHeight/H);if(!(s>0))return;
-  scale=s;$('#wrap').style.width=Math.floor(W*s)+'px';$('#wrap').style.height=Math.floor(H*s)+'px';
-  $('#stage').style.transform='scale('+s+')';
+  var host=$('#host'),hw=host.clientWidth,hh=host.clientHeight,s=Math.min(hw/W,hh/H);if(!(s>0))return;
+  /* на високих екранах світ подовжується вгору й вниз, ігрове поле 360x640 лишається посередині */
+  var ex=Math.max(0,Math.min(240,Math.floor(hh/s-H))),HS=H+ex;
+  EX=ex/2;scale=s;
+  $('#wrap').style.width=Math.floor(W*s)+'px';$('#wrap').style.height=Math.floor(HS*s)+'px';
+  var st=$('#stage');st.style.height=HS+'px';st.style.setProperty('--ex',EX+'px');st.style.transform='scale('+s+')';
+  cv.style.height=HS+'px';
   var k=Math.min(3,s*(window.devicePixelRatio||1));
-  cv.width=Math.round(W*k);cv.height=Math.round(H*k);ctx.setTransform(k,0,0,k,0,0);
+  cv.width=Math.round(W*k);cv.height=Math.round(HS*k);ctx.setTransform(k,0,0,k,0,EX*k);
 }
 window.addEventListener('resize',fit);
 

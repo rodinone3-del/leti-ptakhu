@@ -609,8 +609,8 @@ var AB={
   stat:function(l){return 'щит за кожні '+Math.max(5,14-2*l)+' монет'}},
  glide:{n:'Плавне ширяння',kind:'p',desc:'Птах падає повільніше, тож легше тримати висоту.',
   stat:function(l){return 'гравітація −'+Math.round(glideF(l)*100)+'%'}},
- spring:{n:'Пружні лапки',kind:'p',desc:'Земля відбиває птаха вгору замість удару.',
-  stat:function(l){return Math.max(1,l)+' відбиття за рівень'}},
+ spring:{n:'Пружні лапки',kind:'p',desc:'Земля й верх нижніх колон відбивають птаха вгору, якщо він упав на них животом.',
+  stat:function(l){return (Math.max(1,l)+2)+' відбиття за рівень'}},
  regen:{n:'Кришталеве пір\'я',kind:'p',desc:'Щит сам відновлюється, якщо його немає.',
   stat:function(l){return 'новий щит кожні '+Math.max(12,26-3*l)+' с'}}
 };
@@ -715,6 +715,26 @@ function drawDrop(c,x,y,t,col){
   c.fillStyle='rgba('+col+',.35)';c.beginPath();c.moveTo(x-5,y-8);c.lineTo(x,y-30);c.lineTo(x+5,y-8);c.closePath();c.fill();
   c.fillStyle='#1a1018';c.beginPath();c.arc(x,y,9,0,7);c.fill();
   c.fillStyle='rgba('+col+',1)';c.beginPath();c.arc(x-2+Math.sin(t*9),y+2,5,0,7);c.fill();
+}
+/* лелека впала животом на верх нижньої колони: пружні лапки відбивають її вгору */
+function springLand(sx,o,gy,hg,cave){
+  var yb=gy+hg/2,by=G.by,r=G.rr;
+  if(by>yb+(cave?8:2))return false;
+  return cave?(circleRect(BX,by,r,sx+o.w*.333,yb+10,o.w*.333,10)||circleRect(BX,by,r,sx+o.w*.1667,yb+20,o.w*.667,10)||circleRect(BX,by,r,sx,yb+30,o.w,40))
+             :circleRect(BX,by,r,sx,yb,o.w,40);
+}
+function drawBubbleWarn(c,x,t,i){
+  var pu=.5+.5*Math.sin(t*10+i);
+  c.strokeStyle='rgba(150,255,170,'+(.35+.45*pu)+')';c.lineWidth=2;
+  c.beginPath();c.ellipse(x,GROUND+1,10+4*pu,4+2*pu,0,0,7);c.stroke();
+  c.fillStyle='rgba(150,255,170,'+(.5*pu)+')';c.beginPath();c.moveTo(x-7,GROUND-6);c.lineTo(x+7,GROUND-6);c.lineTo(x,GROUND-20);c.closePath();c.fill();
+}
+function drawBubble(c,x,y,t){
+  c.fillStyle='rgba(150,255,170,.22)';c.beginPath();c.arc(x,y,16,0,7);c.fill();
+  c.fillStyle='rgba(150,255,170,.35)';c.beginPath();c.moveTo(x-5,y+8);c.lineTo(x,y+30);c.lineTo(x+5,y+8);c.closePath();c.fill();
+  c.fillStyle='rgba(60,150,80,.95)';c.beginPath();c.arc(x,y,9,0,7);c.fill();
+  c.strokeStyle='rgba(210,255,215,.95)';c.lineWidth=2;c.beginPath();c.arc(x,y,9,0,7);c.stroke();
+  c.fillStyle='rgba(255,255,255,.9)';c.beginPath();c.arc(x-3+Math.sin(t*9),y-3,2.5,0,7);c.fill();
 }
 function drawGust(c,z,sx0,sx1,t){
   var up=z.dir<0,a=Math.max(-10,sx0),b=Math.min(W+10,sx1);if(b<=a)return;
@@ -882,10 +902,10 @@ var DUN=[
   hint:'Розпечені краплі падають зверху. Мітка вгорі попереджає про падіння.',
   desc:'Розпечені краплі падають просто на лінію польоту. Мітка вгорі показує, де вони впадуть.',
   p:{speed:190,gap:158,count:28,space:210,moveP:.26,maxD:115,drop:.25,doff:64,dvf:200}},
- {id:'swamp',n:'Туманне болото',at:20,seed:2314,skin:'stork',skill:'vacuum',bonus:[250,380,650],th:[.7,.88],lose:'Болото поглинуло вас',
-  hint:'Туман ховає все далеке. Колони гойдаються сильніше.',
-  desc:'Густий туман і дерев\'яні колони, що сильно гойдаються. Далекі проходи майже не видно.',
-  p:{speed:195,gap:155,count:28,space:208,moveP:.6,maxD:112,amp0:26,ampR:22}},
+ {id:'swamp',n:'Туманне болото',at:20,seed:5203,skin:'stork',skill:'vacuum',bonus:[250,380,650],th:[.7,.88],lose:'Болото поглинуло вас',
+  hint:'Туман ховає все далеке. З землі вистрілюють бульбашки: стежте за зеленою міткою внизу.',
+  desc:'Густий туман, дерев\'яні колони, що сильно гойдаються, і болотні бульбашки, які вистрілюють із землі. Далекі проходи майже не видно.',
+  p:{speed:195,gap:155,count:28,space:208,moveP:.6,maxD:112,amp0:26,ampR:22,bub:.3,boff:60,bvf:260}},
  {id:'storm',n:'Грозовий хребет',at:25,seed:5219,skin:'thunder',skill:'auto',bonus:[300,450,800],th:[.7,.88],lose:'Буря перемогла',
   hint:'Потоки повітря й заряди, що падають із хмар. Не втрачайте голову.',
   desc:'Найважче випробування: сильні потоки повітря й заряди, що падають із грозових хмар.',
@@ -932,9 +952,20 @@ function buildDungeon(d){
       }
     }
   }
+  if(p.bub){   /* болотні бульбашки: вистрілюють із землі й летять угору */
+    var r3=rng(d.seed*17+3),bv=p.bvf||DVF;
+    for(i=2;i<p.count-1;i++){
+      if(r3()<p.bub){
+        var q=obs[i],q2=obs[i+1],bx=(q.x+q2.x)/2+27,by0=(q.base+q2.base)/2,sd=r3()<.5?-1:1;
+        var off=(p.boff||60)+r3()*26,ty=by0+sd*off;if(ty>470||ty<130)ty=by0-sd*off;ty=clamp(ty,130,470);
+        drops.push({x:bx,ty:ty,up:1,trig:BX+p.speed*(GROUND+30-ty)/bv,t0:-1,dead:false});
+      }
+    }
+    drops.sort(function(a,b){return a.x-b.x});
+  }
   items.sort(function(a,b){return a.x-b.x});
   var total=0;for(i=0;i<items.length;i++)if(items[i].type==='gem')total++;
-  return{n:0,p:{speed:p.speed,gap:p.gap,count:p.count,space:p.space,moveP:p.moveP,reward:0},obs:obs,items:items,bats:bats,gusts:gusts,drops:drops,dvf:p.dvf||DVF,total:total,finish:x+80,th:DTH[d.id],dun:d};
+  return{n:0,p:{speed:p.speed,gap:p.gap,count:p.count,space:p.space,moveP:p.moveP,reward:0},obs:obs,items:items,bats:bats,gusts:gusts,drops:drops,dvf:p.dvf||DVF,bvf:p.bvf||DVF,total:total,finish:x+80,th:DTH[d.id],dun:d};
 }
 function gustAt(L,x){var a=L.gusts;if(!a)return null;for(var i=0;i<a.length;i++){var z=a[i];if(x<z.x0)return null;if(x<=z.x1)return z}return null}
 
@@ -1050,7 +1081,7 @@ function beginLevel(n,dun){
   if(P.revive)G.revives=P.revive>=5?2:1;
   if(P.small){G.rr=R*(1-(.05*P.small+.05));G.sc=G.rr/R}
   if(P.glide)G.gf=1-glideF(P.glide);
-  if(P.spring)G.spr=Math.max(1,P.spring);
+  if(P.spring)G.spr=Math.max(1,P.spring)+2;
   if(P.vamp)G.vN=Math.max(5,14-2*P.vamp);
   if(P.regen){G.rgN=Math.max(12,26-3*P.regen);G.rg=G.rgN}
   if(P.coinplus&&!dun)G.cp=(8+4*P.coinplus)/100;
@@ -1128,7 +1159,12 @@ function update(dt){
       if(!o.passed&&sx+o.w<BX-R){o.passed=true;g.passed++;snd(660,.05,'sine',.03)}
       if(!dashing&&sx<BX+g.rr&&sx+o.w>BX-g.rr){
         gy=gapY(o,g.tt);var hg=o.gap*g.wf;
-        if(hitObs(sx,o,gy,hg,L.th.cave))hurt();
+        if(hitObs(sx,o,gy,hg,L.th.cave)){
+          if(g.spr>0&&g.vy>60&&springLand(sx,o,gy,hg,L.th.cave)){
+            g.spr--;g.vy=-FLAP*1.1;g.by=Math.min(g.by,gy+hg/2-g.rr-3);g.inv=Math.max(g.inv,.35);
+            snd(420,.2,'triangle',.06,500);burst(BX,gy+hg/2,'#7dffb0',12);fxKey='';
+          }else hurt();
+        }
       }
     }
     var bs=L.bats;
@@ -1145,8 +1181,8 @@ function update(dt){
         var dr=ds[i];if(dr.dead)continue;
         var dsx=dr.x-g.cam;
         if(dr.t0<0){if(dsx>dr.trig){if(dsx>W+60)break;continue}dr.t0=g.tt}
-        var dyy=-30+L.dvf*(g.tt-dr.t0);
-        if(dyy>GROUND+30){dr.dead=true;continue}
+        var dyy=dr.up?GROUND+30-L.bvf*(g.tt-dr.t0):-30+L.dvf*(g.tt-dr.t0);
+        if(dr.up?dyy<-30:dyy>GROUND+30){dr.dead=true;continue}
         var ddx=dsx-BX,ddy=dyy-g.by;
         if(!dashing&&g.inv<=0&&ddx*ddx+ddy*ddy<(g.rr+9)*(g.rr+9)){dr.dead=true;hurt()}
       }
@@ -1353,7 +1389,7 @@ function render(){
     }
     if(L.drops){
       for(i=0;i<L.drops.length;i++){
-        var dr=L.drops[i];if(dr.dead)continue;
+        var dr=L.drops[i];if(dr.dead||dr.up)continue;
         var dsx=dr.x-g.cam;if(dsx>W+20)break;if(dsx<-30)continue;
         if(dr.t0<0){
           var pu=.55+.45*Math.sin(g.t*10+i);
@@ -1373,6 +1409,14 @@ function render(){
       var v=th.vis,rg=c.createRadialGradient(BX+40,g.by,v[0],BX+40,g.by,v[1]);
       rg.addColorStop(0,'rgba('+v[3]+',0)');rg.addColorStop(1,'rgba('+v[3]+','+v[2]+')');
       c.fillStyle=rg;c.fillRect(0,-EX,W,H+2*EX);
+    }
+    if(L.drops){   /* бульбашки малюються поверх туману, щоб їх було видно */
+      for(i=0;i<L.drops.length;i++){
+        var bu=L.drops[i];if(bu.dead||!bu.up)continue;
+        var bsx=bu.x-g.cam;if(bsx>W+20)continue;if(bsx<-30)continue;
+        if(bu.t0<0)drawBubbleWarn(c,bsx,g.t,i);
+        else drawBubble(c,bsx,GROUND+30-L.bvf*(g.tt-bu.t0),g.t);
+      }
     }
     for(i=0;i<late.length;i++)drawItem(c,late[i][0],late[i][1],late[i][2],g.t);
     if(th.storm){var q=g.t%7;if(q<.2){c.fillStyle='rgba(235,240,255,'+(.28*(1-q/.2))+')';c.fillRect(0,-EX,W,H+2*EX)}}

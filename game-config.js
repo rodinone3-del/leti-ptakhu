@@ -7,7 +7,8 @@ window.GAME_CONFIG = {
     ice:   "Ice_Canyon.mp3",   // Крижане ущелля
     forge: "Flame_Forge.mp3",   // Вогняна кузня
     swamp: "Foggy_Swamp.mp3",   // Туманне болото
-    storm: "Thunder_Ridge.mp3"    // Грозовий хребет
+    storm: "Thunder_Ridge.mp3",   // Грозовий хребет
+    west:  "Wild_West.mp3"     // Дикий Захід
   },
   // Кнопка "Продовжити" після програшу (повернення на чекпоінт за рекламу).
   ads: {

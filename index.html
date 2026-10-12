@@ -540,11 +540,7 @@ function musicInit(){
       while((m=re.exec(t)))out.push(decodeURIComponent(m[1].replace(/^.*\//,'')));
       return clean(out);
     }).catch(function(){return []});
-  }).then(function(a){
-    /* додаткові треки меню й звичайних рівнів з game-config.js (levelTracks) */
-    var extra=clean(Array.isArray(CFG.levelTracks)?CFG.levelTracks.map(function(x){return typeof x==='string'?x.trim():''}):[]);
-    extra.forEach(function(x){if(a.indexOf(x)<0)a.push(x)});
-    MU.list=a;MU.loaded=true;musicUi()});
+  }).then(function(a){MU.list=a;MU.loaded=true;musicUi()});
   return MU.loading;
 }
 function musicApplyVol(){var vv=S.musVol*S.master;if(MU.gain)MU.gain.gain.value=vv;if(MU.el)MU.el.volume=MU.gain?1:vv}
@@ -585,8 +581,7 @@ function musicDungeon(id){
 function musicBack(){
   if(MU.mode!=='dun')return;
   MU.mode='';if(MU.el)MU.el.loop=false;
-  if(S.musicOn&&MU.list.length)musicNext();
-  else{musicStop();MU.cur=''}   /* звичайних треків немає: трек підземелля не має лишатися грати в меню */
+  if(S.musicOn)musicNext();else musicStop();
 }
 /* викликається при кожному дотику: браузер дозволяє звук лише після дії користувача */
 function musicKick(){
